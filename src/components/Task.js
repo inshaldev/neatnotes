@@ -1,11 +1,31 @@
 import React, { useRef, useState } from 'react';
+import { db } from '../Firebase';
+import {
+  deleteDoc,
+  doc,
+  serverTimestamp,
+  updateDoc,
+} from '@firebase/firestore';
 import { FaEdit, FaTrash } from 'react-icons/fa';
-import '../styles/Tasks.css';
 
-const Task = ({ task, handleDeleteTask, handleEditTask }) => {
+const Task = ({ task }) => {
   const [editTask, setEditTask] = useState(false);
   const editTaskInput = useRef();
   const { content, id } = task;
+
+  const handleEditTask = async (id, taskValue) => {
+    if (taskValue !== '') {
+      await updateDoc(doc(db, 'tasks', id), {
+        content: taskValue,
+        lastUpdatedAt: new serverTimestamp(),
+      });
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    await deleteDoc(doc(db, 'tasks', id));
+  };
+
   return (
     <div className="task">
       {!editTask ? (

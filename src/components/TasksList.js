@@ -1,85 +1,78 @@
-import React, { useEffect, useState } from 'react';
-import { db } from '../Firebase';
-import {
-  doc,
-  addDoc,
-  collection,
-  deleteDoc,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  where,
-  updateDoc,
-} from '@firebase/firestore';
+import React, { useEffect, useState, useRef } from 'react';
+import { tasksRef } from '../Firebase';
+import { getDocs, orderBy, query, where } from '@firebase/firestore';
 import Task from './Task';
-import { useRef } from 'react';
+import AddTask from './AddTask';
+import { useAuth } from '../contexts/Context';
+import { useNavigate } from 'react-router';
+import SignOut from './SignOut';
+import { PropagateLoader } from 'react-spinners';
 
 const TasksList = () => {
-  const tasksRef = collection(db, 'tasks');
+  const { currentUser, globalLoadingState, setGlobalLoadingState } = useAuth();
+  const [loadingState, setLoadingState] = useState(false);
+  const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [newTask, setNewTask] = useState(false);
   const newTaskInput = useRef();
 
-  const handleNewTask = async () => {
-    setNewTask(!newTask);
-    const taskValue = newTaskInput.current;
-    if (newTask && taskValue.value) {
-      await addDoc(tasksRef, {
-        completed: false,
-        createdAt: new serverTimestamp(),
-        content: taskValue.value,
-        userUID: 'Ohft9sfDxLObTRm6MUF8wvnqXw23',
-      }).then();
-    }
-  };
-
-  const handleDeleteTask = async (id) => {
-    await deleteDoc(doc(db, 'tasks', id));
-  };
-
-  const handleEditTask = async (id, taskValue) => {
-    if (taskValue !== '') {
-      await updateDoc(doc(db, 'tasks', id), { ...doc, content: taskValue });
-    }
-  };
+  useEffect(() => {
+    const checkUser = () => {
+      if (!currentUser) {
+        navigate('/login');
+      }
+    };
+    return checkUser();
+  }, [currentUser, navigate]);
 
   useEffect(() => {
-    const tasksQuery = query(
-      tasksRef,
-      (orderBy('createdAt', 'asc'),
-      where('userUID', '==', 'Ohft9sfDxLObTRm6MUF8wvnqXw23'))
-    );
-
-    const getTasks = onSnapshot(tasksQuery, (snap) => {
-      setTasks(
-        snap.docs.map((doc) => {
-          return { ...doc.data(), id: doc.id };
-        })
+    if (currentUser) {
+      const tasksQuery = query(
+        tasksRef,
+        (where('userUID', '==', currentUser.uid),
+        orderBy('lastUpdatedAt', 'asc'))
       );
-    });
 
-    return getTasks;
+      const getTasks = async () => {
+        const docsData = [];
+        await getDocs(tasksQuery).then((snap) => {
+          snap.docs.forEach((doc) => {
+            docsData.push({ ...doc.data(), id: doc.id });
+          });
+        });
+        setTasks(docsData);
+        setGlobalLoadingState(false);
+      };
+      getTasks();
+    }
   });
+
   return (
-    <div className="tasks-list">
-      {tasks.map((task) => {
-        return (
-          <Task
-            key={task.id}
-            task={task}
-            handleDeleteTask={handleDeleteTask}
-            handleEditTask={handleEditTask}
-          />
-        );
-      })}
-      {newTask && (
-        <input ref={newTaskInput} className="new-task-input" autoFocus />
+    <>
+      {!globalLoadingState && !loadingState ? (
+        <div className="tasks-list">
+          <h1 className="tasks-heading">Tasks</h1>
+          {tasks.map((task) => {
+            return <Task key={task.id} task={task} />;
+          })}
+          {newTask && (
+            <input ref={newTaskInput} className="new-task-input" autoFocus />
+          )}
+          <div className="task-btns">
+            <SignOut setLoadingState={setLoadingState} />
+            <AddTask
+              newTask={newTask}
+              setNewTask={setNewTask}
+              newTaskInput={newTaskInput}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="loader-div">
+          <PropagateLoader size={30} color={'#2a52be'} speedMultiplier={2} />
+        </div>
       )}
-      <button onClick={handleNewTask} className="new-task-btn">
-        Add
-      </button>
-    </div>
+    </>
   );
 };
 
